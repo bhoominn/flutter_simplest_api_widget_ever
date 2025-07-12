@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_api_request_simpler/user_detail_screen.dart';
+import 'package:flutter_api_request_simpler/models/user_model.dart';
+import 'package:flutter_api_request_simpler/screens/user_detail_screen.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-import 'api_controller.dart';
-import 'api_request_widget.dart';
-import 'main.dart';
+import '../network_utils/api_controller.dart';
+import '../network_utils/api_request_widget.dart';
 
 class UsersListScreen extends StatefulWidget {
   const UsersListScreen({super.key});
@@ -14,7 +14,7 @@ class UsersListScreen extends StatefulWidget {
 }
 
 class _UsersListScreenState extends State<UsersListScreen> {
-  ApiRequestController<List<UserResponse>> controller = ApiRequestController();
+  ApiRequestController<UserResponse> controller = ApiRequestController();
 
   @override
   void initState() {
@@ -24,26 +24,32 @@ class _UsersListScreenState extends State<UsersListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: ApiRequestWidget<List<UserResponse>>(
+      body: ApiRequestWidget<UserResponse>(
         controller: controller,
         endpoint: 'users',
         enablePagination: true,
         showLoading: false,
-        //TODO loader widget
-        //TODO error widget
-        //TODO initial data widget
         //TODO multipart
         //TODO show loader based on condition
         //TODO call API only once if initial data is given based on condition
-        doSomethingWithResponse: (response) {
-          log('doSomethingWithResponse ${response.length} ${controller.getData.length}');
+        useInitialDataOnly: true,
+        initialData: UserResponse(
+          status: true,
+          data: [
+            UserData(login: 'bhoominn', location: 'India'),
+            UserData(login: 'mojombo', location: 'India'),
+          ],
+        ),
+        onResponseReceived: (response) {
+          log('onResponseReceived ${response.data!.length} ${controller.getData.data!.length}');
         },
-        onSuccess: (userList, scrollController) {
+        onSuccess: (response, scrollController) {
           return AnimatedListView(
             controller: scrollController,
-            itemCount: userList.length,
+            itemCount: response.data!.length,
             itemBuilder: (context, index) {
-              final user = userList[index];
+              final user = response.data![index];
+
               return ListTile(
                 title: Text(user.login.toString()),
                 onTap: () {
@@ -61,10 +67,8 @@ class _UsersListScreenState extends State<UsersListScreen> {
             },
           );
         },
-        onError: (error, errorWidget) {
-          return errorWidget;
-        },
-        fromJson: (json) => (json as List).map((e) => UserResponse.fromJson(e)).toList(),
+        // fromJson: (json) => (json as List).map((e) => UserResponse.fromJson(e)).toList(),
+        fromJson: (json) => UserResponse.fromJson(json),
       ),
     );
   }

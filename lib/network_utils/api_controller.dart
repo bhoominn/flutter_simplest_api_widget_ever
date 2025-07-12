@@ -1,15 +1,37 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/browser.dart';
 import 'package:dio/dio.dart';
 import 'package:nb_utils/nb_utils.dart';
 
+import '../main.dart';
 import 'api_request_widget.dart';
-import 'main.dart';
+
+final Dio dio = Dio(
+  BaseOptions(
+    baseUrl: baseUrl,
+    sendTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+    responseType: ResponseType.json,
+    headers: buildHeaderTokens(),
+  ),
+);
+
+Map<String, String> buildHeaderTokens({Map<String, String>? extraHeaders}) {
+  Map<String, String> header = {
+    HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
+    HttpHeaders.cacheControlHeader: 'no-cache',
+    HttpHeaders.acceptHeader: 'application/json; charset=utf-8',
+  };
+
+  if (extraHeaders != null) header.addAll(extraHeaders);
+  log(jsonEncode(header));
+  return header;
+}
 
 class ApiRequestController<T> {
   ApiRequestWidgetState<T>? _state;
-  final Dio _dio = Dio();
   CancelToken? _cancelToken;
 
   T get getData => _state?.response as T;
@@ -43,22 +65,6 @@ class ApiRequestController<T> {
 
   void bind(ApiRequestWidgetState<T> state) => _state = state;
 
-  Map<String, String> _buildHeaderTokens(Map<String, String>? extraHeaders) {
-    Map<String, String> header = {
-      HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
-      HttpHeaders.cacheControlHeader: 'no-cache',
-      HttpHeaders.acceptHeader: 'application/json; charset=utf-8',
-    };
-
-    /*if (appStore.isLoggedIn) {
-      header.putIfAbsent(HttpHeaders.authorizationHeader, () => 'Bearer \${appStore.token}');
-    }*/
-
-    if (extraHeaders != null) header.addAll(extraHeaders);
-    log(jsonEncode(header));
-    return header;
-  }
-
   void _setBaseUrl(String endPoint) {
     Uri url = Uri.parse(endPoint);
 
@@ -68,8 +74,8 @@ class ApiRequestController<T> {
       url = Uri.parse('$baseUrl$endPoint');
     }
 
-    // if (isWeb) _dio.httpClientAdapter = BrowserHttpClientAdapter();
-    _dio.options.baseUrl = url.toString();
+    if (isWeb) dio.httpClientAdapter = BrowserHttpClientAdapter();
+    dio.options.baseUrl = url.toString();
   }
 
   Future<dynamic> callApi(Uri uri, Map<String, dynamic>? body, HttpMethodType method, {Map<String, String>? headers}) async {
@@ -77,29 +83,24 @@ class ApiRequestController<T> {
     _cancelToken = CancelToken();
     _setBaseUrl(uri.toString());
 
-    final options = Options(
-      headers: _buildHeaderTokens(headers),
-      sendTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      responseType: ResponseType.json,
-    );
+    final options = Options(headers: buildHeaderTokens(extraHeaders: headers));
 
     try {
-      log('URL: ${_dio.options.baseUrl}');
+      log('URL: ${dio.options.baseUrl}');
 
       Response response;
       switch (method) {
         case HttpMethodType.GET:
-          response = await _dio.get(_dio.options.baseUrl, options: options, cancelToken: _cancelToken);
+          response = await dio.get(dio.options.baseUrl, options: options, cancelToken: _cancelToken);
           break;
         case HttpMethodType.POST:
-          response = await _dio.post(_dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
+          response = await dio.post(dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
           break;
         case HttpMethodType.PUT:
-          response = await _dio.put(_dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
+          response = await dio.put(dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
           break;
         case HttpMethodType.DELETE:
-          response = await _dio.delete(_dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
+          response = await dio.delete(dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
           break;
       }
 
@@ -107,7 +108,7 @@ class ApiRequestController<T> {
       return await _handleResponse(response);
     } catch (e) {
       _cancelToken?.cancel();
-      _handleError(e);
+      throw _handleError(e);
     }
   }
 
@@ -133,7 +134,7 @@ class ApiRequestController<T> {
     }
   }
 
-  Never _handleError(dynamic error) {
+  dynamic _handleError(dynamic error) {
     if (error is DioException) {
       log('[DIO ERROR] ${error.message} ${error.type}');
       log('[RESPONSE] ${error.response?.data}');
@@ -167,7 +168,10 @@ class ApiRequestController<T> {
 
   void nextPage() => _state?.nextPage();
 
-  void retry() => _state?.fetchData();
+  void retry() {
+    _state?.init();
+    _state?.updateWidget();
+  }
 
   void dispose() {
     cancel();

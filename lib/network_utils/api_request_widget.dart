@@ -11,34 +11,45 @@ class ApiRequestWidget<T> extends StatefulWidget {
   final bool enablePagination;
   final String pageKey;
 
-  // take doSomethingWithResponse param callback
-  final void Function(T response)? doSomethingWithResponse;
+  // take onResponseReceived param callback
+  final void Function(T response)? onResponseReceived;
 
   final T Function(dynamic json) fromJson; // can parse single or list
-  final Widget Function(T response, ScrollController? scrollController) onSuccess;
-  final Widget Function(String error, Widget errorWidget) onError;
+  final Widget Function(T response, ScrollController? scrollController)? onSuccess;
+  final Widget Function(String error, Widget errorWidget)? onError;
 
   final Map<String, dynamic>? queryParams;
   final ApiRequestController controller;
 
+  final Widget? defaultWidget;
+  final Widget? loaderWidget;
+  final T? initialData;
+  final bool useInitialDataOnly;
+  final bool skipInitialCall;
+
   const ApiRequestWidget({
     super.key,
+    required this.controller,
     required this.endpoint,
 
     /// fromJson can parse single or list
     /// For single response - fromJson: (json) => MyModel.fromJson(json),
     /// For list response - fromJson: (json) => (json as List).map((e) => MyModel.fromJson(e)).toList(),
     required this.fromJson,
-    required this.onSuccess,
-    required this.onError,
-    required this.controller,
+    this.onSuccess,
+    this.onError,
     this.method = HttpMethodType.GET,
     this.body,
     this.showLoading = true,
     this.enablePagination = false,
     this.pageKey = "page",
     this.queryParams,
-    this.doSomethingWithResponse,
+    this.onResponseReceived,
+    this.defaultWidget,
+    this.loaderWidget,
+    this.initialData,
+    this.useInitialDataOnly = false,
+    this.skipInitialCall = false,
   });
 
   @override
@@ -53,19 +64,28 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
   T? response;
   int _currentPage = 1;
 
+  late bool _skipInitialCall;
+
   @override
   void initState() {
     super.initState();
     widget.controller.bind(this);
+    _skipInitialCall = widget.skipInitialCall;
 
     if (widget.enablePagination) {
       scrollController = ScrollController();
     }
-    init();
+    if (!widget.skipInitialCall) {
+      afterBuildCreated(() {
+        init();
+      });
+    }
   }
 
   void init() async {
-    _future = fetchData();
+    _future = fetchData().catchError((e) {
+      throw e;
+    });
   }
 
   void updateWidget() {
@@ -74,10 +94,14 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
 
   Future<T> fetchData() async {
     setState(() {
+      _skipInitialCall = false;
       _isLoading = widget.showLoading;
       _error = null;
     });
 
+    if (widget.initialData != null && widget.useInitialDataOnly) {
+      return widget.initialData!;
+    }
     try {
       final query = Map<String, dynamic>.from(widget.queryParams ?? {});
 
@@ -97,7 +121,7 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
       } else {
         this.response = parsedData;
       }
-      widget.doSomethingWithResponse?.call(this.response as T);
+      widget.onResponseReceived?.call(this.response as T);
       _isLoading = false;
 
       setState(() {});
@@ -126,20 +150,28 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
 
   @override
   Widget build(BuildContext context) {
+    if (_skipInitialCall) {
+      return widget.defaultWidget ?? Offstage();
+    }
     return FutureBuilder(
       future: _future,
+      initialData: widget.initialData,
       builder: (_, snap) {
         if (snap.hasError) {
-          return widget.onError(snap.error.toString(), NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry));
+          if (widget.onError != null) {
+            return widget.onError!(snap.error.toString(), NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry));
+          } else {
+            return NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry);
+          }
         } else if (snap.hasData) {
           return Stack(
             children: [
-              widget.onSuccess(snap.data as T, scrollController),
-              if (_isLoading) const Center(child: Loader()),
+              if (widget.onSuccess != null) widget.onSuccess!(snap.data as T, scrollController),
+              // if (_isLoading) widget.loaderWidget ?? const Center(child: Loader()),
             ],
           );
         } else {
-          return Offstage();
+          return widget.loaderWidget ?? const Center(child: Loader());
         }
       },
     );
