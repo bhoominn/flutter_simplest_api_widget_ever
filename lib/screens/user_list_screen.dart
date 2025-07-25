@@ -28,21 +28,6 @@ class _UsersListScreenState extends State<UsersListScreen> {
         controller: controller,
         endpoint: 'users',
         enablePagination: true,
-        useInitialDataOnly: true,
-        initialData: UserResponse(
-          fields: {
-            'status': true,
-            'data': [
-              {
-                {"id": 1, "login": "bhoomin", "title": "developer", "bio": "Flutter enthusiast", "location": "India"},
-                {"id": 2, "login": "naik", "title": "manager", "bio": "Project head", "location": "Surat"},
-              },
-            ],
-          },
-        ),
-        onResponseReceived: (response, page) {
-          log('onResponseReceived ${response.data!.length} ${controller.getData.data!.length}');
-        },
         onSuccess: (response, scrollController) {
           return AnimatedListView(
             controller: scrollController,
@@ -67,7 +52,6 @@ class _UsersListScreenState extends State<UsersListScreen> {
             },
           );
         },
-        // fromJson: (json) => (json as List).map((e) => UserResponse.fromJson(e)).toList(),
         fromJson: (json) => UserResponse.fromJson(json),
       ),
     );

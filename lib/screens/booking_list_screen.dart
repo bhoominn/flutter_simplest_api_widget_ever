@@ -17,8 +17,10 @@ class ServiceListScreen extends StatefulWidget {
 }
 
 class _ServiceListScreenState extends State<ServiceListScreen> {
-  ApiRequestController<List<ServiceData>> serviceController = ApiRequestController();
-  ApiRequestController<List<StatusModel>> bookingStatusController = ApiRequestController();
+  ApiRequestController<List<ServiceData>> serviceController =
+      ApiRequestController();
+  ApiRequestController<List<StatusModel>> bookingStatusController =
+      ApiRequestController();
 
   String selectedStatus = '';
 
@@ -42,7 +44,8 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
         endpoint: 'service-list',
         queryParams: getQueryParam,
         enablePagination: true,
-        fromJson: (json) => (json as List).map((e) => ServiceData.fromJson(e)).toList(),
+        fromJson: (json) =>
+            (json as List).map((e) => ServiceData.fromJson(e)).toList(),
         onSuccess: (response, scrollController) {
           return AnimatedScrollView(
             controller: scrollController,
@@ -57,7 +60,8 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
               ApiRequestWidget(
                 controller: bookingStatusController,
                 endpoint: 'booking-status',
-                fromJson: (json) => (json as List).map((e) => StatusModel.fromJson(e)).toList(),
+                fromJson: (json) =>
+                    (json as List).map((e) => StatusModel.fromJson(e)).toList(),
                 initialData: cachedStatus,
                 useInitialDataOnly: true,
                 onSuccess: (response, scrollController) {
@@ -104,7 +108,9 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ...List.generate(data.attchments.validate().length, (index) {
+                        ...List.generate(data.attchments.validate().length, (
+                          index,
+                        ) {
                           return Image.network(
                             data.attchments![index].validate(),
                             height: 150,

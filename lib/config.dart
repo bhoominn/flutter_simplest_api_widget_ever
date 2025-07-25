@@ -1,2 +1,2 @@
-const baseUrl = 'https://apps.iqonic.design/handyman/api/';
+const baseUrl = '';
 const perPageItem = 22;
