@@ -28,19 +28,19 @@ class _UsersListScreenState extends State<UsersListScreen> {
         controller: controller,
         endpoint: 'users',
         enablePagination: true,
-        showLoading: false,
-        //TODO multipart
-        //TODO show loader based on condition
-        //TODO call API only once if initial data is given based on condition
         useInitialDataOnly: true,
         initialData: UserResponse(
-          status: true,
-          data: [
-            UserData(login: 'bhoominn', location: 'India'),
-            UserData(login: 'mojombo', location: 'India'),
-          ],
+          fields: {
+            'status': true,
+            'data': [
+              {
+                {"id": 1, "login": "bhoomin", "title": "developer", "bio": "Flutter enthusiast", "location": "India"},
+                {"id": 2, "login": "naik", "title": "manager", "bio": "Project head", "location": "Surat"},
+              },
+            ],
+          },
         ),
-        onResponseReceived: (response) {
+        onResponseReceived: (response, page) {
           log('onResponseReceived ${response.data!.length} ${controller.getData.data!.length}');
         },
         onSuccess: (response, scrollController) {

@@ -19,11 +19,6 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   ApiRequestController<UserData> controller = ApiRequestController();
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: ApiRequestWidget<UserData>(
@@ -32,11 +27,14 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         initialData: cachedUser[widget.user.login],
         fromJson: (json) => UserData.fromJson(json),
         useInitialDataOnly: true,
-        onResponseReceived: (response) {
+        onResponseReceived: (response, page) {
           cachedUser.putIfAbsent(widget.user.login!, () => response);
         },
         onSuccess: (response, scrollController) {
-          return Padding(padding: EdgeInsets.all(8.0), child: Text(response.bio ?? 'No data'));
+          return Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text(response.bio ?? 'No data'),
+          );
         },
       ),
     );

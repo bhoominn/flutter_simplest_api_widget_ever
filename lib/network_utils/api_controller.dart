@@ -5,14 +5,14 @@ import 'package:dio/browser.dart';
 import 'package:dio/dio.dart';
 import 'package:nb_utils/nb_utils.dart';
 
-import '../main.dart';
+import '../config.dart';
 import 'api_request_widget.dart';
 
 final Dio dio = Dio(
   BaseOptions(
     baseUrl: baseUrl,
-    sendTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 10),
+    // sendTimeout: const Duration(seconds: 10),
+    // receiveTimeout: const Duration(seconds: 10),
     responseType: ResponseType.json,
     headers: buildHeaderTokens(),
   ),
@@ -23,7 +23,11 @@ Map<String, String> buildHeaderTokens({Map<String, String>? extraHeaders}) {
     HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
     HttpHeaders.cacheControlHeader: 'no-cache',
     HttpHeaders.acceptHeader: 'application/json; charset=utf-8',
+    HttpHeaders.accessControlAllowHeadersHeader: '*',
+    HttpHeaders.accessControlAllowOriginHeader: '*',
   };
+
+  if (getStringAsync('token').isNotEmpty) header['Authorization'] = 'Bearer ${getStringAsync('token')}';
 
   if (extraHeaders != null) header.addAll(extraHeaders);
   log(jsonEncode(header));
@@ -40,6 +44,10 @@ class ApiRequestController<T> {
     _state?.response = data;
     updateWidget();
   }
+
+  void setBody(Map<String, dynamic>? _body) => _state?.body = _body;
+
+  void setQueryParams(Map<String, String>? _queryParams) => _state?.queryParams = _queryParams;
 
   /// Append to list (if response is List<T>)
   void appendData(List<dynamic> newItems) {
@@ -79,6 +87,7 @@ class ApiRequestController<T> {
   }
 
   Future<dynamic> callApi(Uri uri, Map<String, dynamic>? body, HttpMethodType method, {Map<String, String>? headers}) async {
+    late Response response;
     if (_cancelToken != null && !_cancelToken!.isCancelled) return;
     _cancelToken = CancelToken();
     _setBaseUrl(uri.toString());
@@ -88,7 +97,6 @@ class ApiRequestController<T> {
     try {
       log('URL: ${dio.options.baseUrl}');
 
-      Response response;
       switch (method) {
         case HttpMethodType.GET:
           response = await dio.get(dio.options.baseUrl, options: options, cancelToken: _cancelToken);
@@ -105,9 +113,21 @@ class ApiRequestController<T> {
       }
 
       _cancelToken?.cancel();
+
       return await _handleResponse(response);
     } catch (e) {
       _cancelToken?.cancel();
+
+      if (e is DioException) {
+        final statusCode = e.response?.statusCode;
+
+        if (statusCode == 401) {
+          // await login();
+          if (getStringAsync("token").isNotEmpty) {
+            return await callApi(uri, body, method, headers: headers);
+          }
+        }
+      }
       throw _handleError(e);
     }
   }

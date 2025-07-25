@@ -1,53 +1,31 @@
-class UserResponse {
-  bool? status;
-  List<UserData>? data;
+import 'package:nb_utils/nb_utils.dart';
 
-  UserResponse({this.status, this.data});
-
-  UserResponse.fromJson(Map<String, dynamic> json) {
-    status = json['status'];
-    if (json['data'] != null) {
-      data = <UserData>[];
-      json['data'].forEach((v) {
-        data!.add(new UserData.fromJson(v));
-      });
-    }
+class UserResponse extends JsonModel {
+  UserResponse({Map<String, dynamic>? fields}) {
+    registerFields(fields: fields);
   }
 
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['status'] = this.status;
-    if (this.data != null) {
-      data['data'] = this.data!.map((v) => v.toJson()).toList();
-    }
-    return data;
-  }
+  factory UserResponse.fromJson(Map<String, dynamic> json) => UserResponse(fields: json);
+
+  bool? get status => getField<bool>('status');
+
+  List<UserData>? get data => getField<List<dynamic>>('data')?.map((e) => UserData.fromJson(e as Map<String, dynamic>)).toList();
 }
 
-class UserData {
-  int? id;
-  String? login;
-  String? title;
-  String? bio;
-  String? location;
-
-  UserData({this.id, this.login, this.title, this.bio, this.location});
-
-  UserData.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    login = json['login'];
-    title = json['title'];
-    bio = json['bio'];
-    location = json['location'];
+class UserData extends JsonModel {
+  UserData({Map<String, dynamic>? fields}) {
+    registerFields(fields: fields);
   }
 
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['id'] = this.id;
-    data['login'] = this.login;
-    data['bio'] = this.bio;
-    data['title'] = this.title;
-    data['location'] = this.location;
-    return data;
-  }
+  factory UserData.fromJson(Map<String, dynamic> json) => UserData(fields: json);
+
+  int? get id => getField<int>('id');
+
+  String? get login => getField<String>('login');
+
+  String? get title => getField<String>('title');
+
+  String? get bio => getField<String>('bio');
+
+  String? get location => getField<String>('location');
 }

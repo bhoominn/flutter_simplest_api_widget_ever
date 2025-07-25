@@ -1,31 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:nb_utils/nb_utils.dart';
 
+import '../config.dart';
 import 'api_controller.dart';
 
 class ApiRequestWidget<T> extends StatefulWidget {
+  final ApiRequestController controller;
   final String endpoint;
-  final HttpMethodType method;
-  final Map<String, dynamic>? body;
-  final bool showLoading;
-  final bool enablePagination;
-  final String pageKey;
-
-  // take onResponseReceived param callback
-  final void Function(T response)? onResponseReceived;
-
   final T Function(dynamic json) fromJson; // can parse single or list
+
   final Widget Function(T response, ScrollController? scrollController)? onSuccess;
   final Widget Function(String error, Widget errorWidget)? onError;
 
-  final Map<String, dynamic>? queryParams;
-  final ApiRequestController controller;
+  final HttpMethodType method;
+  final Map<String, dynamic>? body;
+  final Map<String, String>? queryParams;
 
-  final Widget? defaultWidget;
+  final bool showLoading;
   final Widget? loaderWidget;
+
+  final bool enablePagination;
+  final String pageKey;
+
+  final void Function(T response, int page)? onResponseReceived;
+
   final T? initialData;
   final bool useInitialDataOnly;
   final bool skipInitialCall;
+
+  final Widget? defaultWidget;
 
   const ApiRequestWidget({
     super.key,
@@ -59,16 +62,23 @@ class ApiRequestWidget<T> extends StatefulWidget {
 class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
   ScrollController? scrollController;
   Future<T>? _future;
+
+  Map<String, dynamic>? body;
+  Map<String, String>? queryParams;
+
   bool _isLoading = true;
   String? _error;
   T? response;
   int _currentPage = 1;
+  bool isLastPage = false;
 
   late bool _skipInitialCall;
 
   @override
   void initState() {
     super.initState();
+    body = widget.body;
+    queryParams = widget.queryParams;
     widget.controller.bind(this);
     _skipInitialCall = widget.skipInitialCall;
 
@@ -103,7 +113,7 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
       return widget.initialData!;
     }
     try {
-      final query = Map<String, dynamic>.from(widget.queryParams ?? {});
+      final query = Map<String, dynamic>.from(queryParams ?? {});
 
       if (widget.enablePagination) {
         query[widget.pageKey] = _currentPage.toString();
@@ -111,17 +121,52 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
 
       final uri = Uri.parse(widget.endpoint).replace(queryParameters: query);
 
-      final response = await widget.controller.callApi(uri, widget.body, widget.method);
+      final response = await widget.controller.callApi(uri, body, widget.method);
+
+      Iterable extractDataList(dynamic resp) {
+        if (resp is Map && resp['data'] is List) {
+          return resp['data'];
+        } else if (resp is List) {
+          return resp;
+        } else {
+          return [];
+        }
+      }
 
       // Let fromJson handle parsing logic whether it's a List or Map
-      final parsedData = widget.fromJson(response);
+      if (widget.enablePagination) {
+        if (this.response == null) {
+          // First page
+          final dataList = extractDataList(response);
+          final parsedData = widget.fromJson(dataList);
+          this.response = parsedData;
+          isLastPage = (parsedData as List).isEmpty;
+        } else {
+          // Next pages
+          final dataList = extractDataList(response);
+          final parsedData = widget.fromJson(dataList);
 
-      if (parsedData is List && this.response != null && widget.enablePagination) {
-        (this.response as List).addAll(parsedData);
+          // Clear the list if it's the first page
+          if (_currentPage == 1) (this.response as List).clear();
+
+          (this.response as List).addAll(parsedData as Iterable);
+          isLastPage = (parsedData as List).length != perPageItem;
+        }
       } else {
-        this.response = parsedData;
+        // Not paginated – handle full object, list or object with 'data'
+        if (response is Map && response.containsKey('data') && response['data'] is List) {
+          final parsedData = widget.fromJson(response['data']);
+          this.response = parsedData;
+        } else if (response is List) {
+          final parsedData = widget.fromJson(response);
+          this.response = parsedData;
+        } else {
+          final parsedData = widget.fromJson(response);
+          this.response = parsedData;
+        }
       }
-      widget.onResponseReceived?.call(this.response as T);
+
+      widget.onResponseReceived?.call(this.response as T, _currentPage);
       _isLoading = false;
 
       setState(() {});
@@ -138,12 +183,14 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
   }
 
   void nextPage() {
-    _currentPage++;
-    init();
+    if (widget.enablePagination && !isLastPage) {
+      _currentPage++;
+      init();
+    }
   }
 
   void refresh({bool showLoading = true}) {
-    // _isLoading = showLoading
+    _isLoading = showLoading;
     _currentPage = 1;
     init();
   }
@@ -159,7 +206,10 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
       builder: (_, snap) {
         if (snap.hasError) {
           if (widget.onError != null) {
-            return widget.onError!(snap.error.toString(), NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry));
+            return widget.onError!(
+              snap.error.toString(),
+              NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry),
+            );
           } else {
             return NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry);
           }
@@ -167,10 +217,11 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
           return Stack(
             children: [
               if (widget.onSuccess != null) widget.onSuccess!(snap.data as T, scrollController),
-              // if (_isLoading) widget.loaderWidget ?? const Center(child: Loader()),
+              if (_isLoading) widget.loaderWidget ?? const Center(child: Loader()),
             ],
           );
         } else {
+          if (!widget.showLoading) return Offstage();
           return widget.loaderWidget ?? const Center(child: Loader());
         }
       },
