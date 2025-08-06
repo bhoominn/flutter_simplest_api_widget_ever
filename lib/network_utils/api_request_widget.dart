@@ -9,7 +9,8 @@ class ApiRequestWidget<T> extends StatefulWidget {
   final String endpoint;
   final T Function(dynamic json) fromJson; // can parse single or list
 
-  final Widget Function(T response, ScrollController? scrollController)? onSuccess;
+  final Widget Function(T response, ScrollController? scrollController)?
+  onSuccess;
   final Widget Function(String error, Widget errorWidget)? onError;
 
   final HttpMethodType method;
@@ -121,7 +122,11 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
 
       final uri = Uri.parse(widget.endpoint).replace(queryParameters: query);
 
-      final response = await widget.controller.callApi(uri, body, widget.method);
+      final response = await widget.controller.callApi(
+        uri,
+        body,
+        widget.method,
+      );
 
       Iterable extractDataList(dynamic resp) {
         if (resp is Map && resp['data'] is List) {
@@ -154,7 +159,9 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
         }
       } else {
         // Not paginated – handle full object, list or object with 'data'
-        if (response is Map && response.containsKey('data') && response['data'] is List) {
+        if (response is Map &&
+            response.containsKey('data') &&
+            response['data'] is List) {
           final parsedData = widget.fromJson(response['data']);
           this.response = parsedData;
         } else if (response is List) {
@@ -208,16 +215,24 @@ class ApiRequestWidgetState<T> extends State<ApiRequestWidget<T>> {
           if (widget.onError != null) {
             return widget.onError!(
               snap.error.toString(),
-              NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry),
+              NoDataWidget(
+                title: snap.error.toString(),
+                onRetry: widget.controller.retry,
+              ),
             );
           } else {
-            return NoDataWidget(title: snap.error.toString(), onRetry: widget.controller.retry);
+            return NoDataWidget(
+              title: snap.error.toString(),
+              onRetry: widget.controller.retry,
+            );
           }
         } else if (snap.hasData) {
           return Stack(
             children: [
-              if (widget.onSuccess != null) widget.onSuccess!(snap.data as T, scrollController),
-              if (_isLoading) widget.loaderWidget ?? const Center(child: Loader()),
+              if (widget.onSuccess != null)
+                widget.onSuccess!(snap.data as T, scrollController),
+              if (_isLoading)
+                widget.loaderWidget ?? const Center(child: Loader()),
             ],
           );
         } else {

@@ -7,32 +7,10 @@ import 'package:nb_utils/nb_utils.dart';
 
 import '../config.dart';
 import 'api_request_widget.dart';
+import 'network_utils.dart';
 
-final Dio dio = Dio(
-  BaseOptions(
-    baseUrl: baseUrl,
-    // sendTimeout: const Duration(seconds: 10),
-    // receiveTimeout: const Duration(seconds: 10),
-    responseType: ResponseType.json,
-    headers: buildHeaderTokens(),
-  ),
-);
-
-Map<String, String> buildHeaderTokens({Map<String, String>? extraHeaders}) {
-  Map<String, String> header = {
-    HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
-    HttpHeaders.cacheControlHeader: 'no-cache',
-    HttpHeaders.acceptHeader: 'application/json; charset=utf-8',
-    HttpHeaders.accessControlAllowHeadersHeader: '*',
-    HttpHeaders.accessControlAllowOriginHeader: '*',
-  };
-
-  if (getStringAsync('token').isNotEmpty) header['Authorization'] = 'Bearer ${getStringAsync('token')}';
-
-  if (extraHeaders != null) header.addAll(extraHeaders);
-  log(jsonEncode(header));
-  return header;
-}
+// Use the shared Dio instance and error constants
+final Dio dio = NetworkUtilsShared.dio;
 
 class ApiRequestController<T> {
   ApiRequestWidgetState<T>? _state;
@@ -47,7 +25,8 @@ class ApiRequestController<T> {
 
   void setBody(Map<String, dynamic>? _body) => _state?.body = _body;
 
-  void setQueryParams(Map<String, String>? _queryParams) => _state?.queryParams = _queryParams;
+  void setQueryParams(Map<String, String>? _queryParams) =>
+      _state?.queryParams = _queryParams;
 
   /// Append to list (if response is List<T>)
   void appendData(List<dynamic> newItems) {
@@ -82,39 +61,32 @@ class ApiRequestController<T> {
       url = Uri.parse('$baseUrl$endPoint');
     }
 
-    if (isWeb) dio.httpClientAdapter = BrowserHttpClientAdapter();
+    NetworkUtilsShared.setupWebAdapter();
     dio.options.baseUrl = url.toString();
   }
 
-  Future<dynamic> callApi(Uri uri, Map<String, dynamic>? body, HttpMethodType method, {Map<String, String>? headers}) async {
-    late Response response;
+  Future<dynamic> callApi(
+    Uri uri,
+    Map<String, dynamic>? body,
+    HttpMethodType method, {
+    Map<String, String>? headers,
+  }) async {
     if (_cancelToken != null && !_cancelToken!.isCancelled) return;
     _cancelToken = CancelToken();
     _setBaseUrl(uri.toString());
 
-    final options = Options(headers: buildHeaderTokens(extraHeaders: headers));
+    final requestHeaders = NetworkUtilsShared.buildHeaders(
+      extraHeaders: headers,
+    );
 
     try {
-      log('URL: ${dio.options.baseUrl}');
-
-      switch (method) {
-        case HttpMethodType.GET:
-          response = await dio.get(dio.options.baseUrl, options: options, cancelToken: _cancelToken);
-          break;
-        case HttpMethodType.POST:
-          response = await dio.post(dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
-          break;
-        case HttpMethodType.PUT:
-          response = await dio.put(dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
-          break;
-        case HttpMethodType.DELETE:
-          response = await dio.delete(dio.options.baseUrl, data: body, options: options, cancelToken: _cancelToken);
-          break;
-      }
-
-      _cancelToken?.cancel();
-
-      return await _handleResponse(response);
+      return await NetworkUtilsShared.makeRequest(
+        dio.options.baseUrl,
+        method,
+        body: body,
+        headers: requestHeaders,
+        cancelToken: _cancelToken,
+      );
     } catch (e) {
       _cancelToken?.cancel();
 
@@ -128,53 +100,7 @@ class ApiRequestController<T> {
           }
         }
       }
-      throw _handleError(e);
-    }
-  }
-
-  dynamic _handleResponse(Response response) {
-    log('URL: ${response.requestOptions.baseUrl}');
-    if (response.requestOptions.method == HttpMethodType.POST.name) {
-      log('Request: ${jsonEncode(response.requestOptions.data)}');
-    }
-    log('Response (${response.requestOptions.method} ${response.statusCode}): ${response.data}');
-    log('------------------------------------------------------');
-
-    if (response.statusCode.validate().isSuccessful()) {
-      if (response.data is Map && response.data.containsKey('status')) {
-        if (response.data['status']) {
-          return response.data;
-        } else {
-          throw response.data['message'] ?? errorSomethingWentWrong;
-        }
-      }
-      return response.data;
-    } else {
-      throw errorSomethingWentWrong;
-    }
-  }
-
-  dynamic _handleError(dynamic error) {
-    if (error is DioException) {
-      log('[DIO ERROR] ${error.message} ${error.type}');
-      log('[RESPONSE] ${error.response?.data}');
-
-      final statusCode = error.response?.statusCode;
-
-      if (statusCode == 401 || statusCode == 403) {
-        throw "Unauthorized access.";
-      } else if (error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.receiveTimeout ||
-          error.type == DioExceptionType.sendTimeout) {
-        throw "Request timed out.";
-      } else if (error.type == DioExceptionType.connectionError || error.message?.contains("SocketException") == true) {
-        throw errorInternetNotAvailable;
-      } else {
-        throw errorSomethingWentWrong;
-      }
-    } else {
-      log(error);
-      throw error;
+      throw e;
     }
   }
 
@@ -184,7 +110,8 @@ class ApiRequestController<T> {
 
   void _unbind() => _state = null;
 
-  void refresh({bool showLoading = true}) => _state?.refresh(showLoading: showLoading);
+  void refresh({bool showLoading = true}) =>
+      _state?.refresh(showLoading: showLoading);
 
   void nextPage() => _state?.nextPage();
 
